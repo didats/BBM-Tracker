@@ -309,5 +309,64 @@ def stats():
         total_dist_mileage=total_dist_mileage,
     )
 
+# ── Timeline ───────────────────────────────────────────────────────────────────
+
+@app.route("/timeline")
+def timeline():
+    vid = get_active_vehicle_id()
+    db = get_db()
+    
+    timeline_items = []
+    
+    if vid:
+        # Get vehicle creation
+        vehicle = db.table("vehicles").select("*").eq("id", vid).single().execute().data
+        if vehicle:
+            timeline_items.append({
+                "type": "vehicle_created",
+                "timestamp": vehicle["created_at"],
+                "vehicle_name": vehicle["name"],
+                "vehicle_type": vehicle["type"],
+                "notes": vehicle["notes"],
+                "icon": "car-front-fill",
+                "icon_class": "ri-blue"
+            })
+        
+        # Get fuel consumption entries
+        consumption_records = db.table("consumption").select("*").eq("vehicle_id", vid).order("created_at").execute().data
+        for record in consumption_records:
+            timeline_items.append({
+                "type": "fuel_entry",
+                "timestamp": record["created_at"],
+                "fuel_type": record["fuel_type"],
+                "price": record["price"],
+                "current_km": record["current_km"],
+                "distance": record["distance"],
+                "notes": record["notes"],
+                "icon": "fuel-pump-fill",
+                "icon_class": "ri-green" if record["fuel_type"] == "Pertalite" else "ri-blue" if record["fuel_type"] == "Pertamax" else "ri-red"
+            })
+        
+        # Get mileage entries (exclude ones that are already part of fuel entries)
+        mileage_records = db.table("mileage").select("*").eq("vehicle_id", vid).order("recorded_at").execute().data
+        fuel_timestamps = [r["created_at"] for r in consumption_records]
+        
+        for record in mileage_records:
+            # Only add standalone mileage entries (not created with fuel entries)
+            if record["recorded_at"] not in fuel_timestamps:
+                timeline_items.append({
+                    "type": "mileage_entry", 
+                    "timestamp": record["recorded_at"],
+                    "odometer_km": record["odometer_km"],
+                    "notes": record["notes"],
+                    "icon": "speedometer2",
+                    "icon_class": "ri-orange"
+                })
+    
+    # Sort by timestamp descending (most recent first)
+    timeline_items.sort(key=lambda x: x["timestamp"], reverse=True)
+    
+    return render_template("timeline.html", timeline_items=timeline_items)
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

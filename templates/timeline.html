@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Timeline — BBM Tracker{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:20px;">
+    <div style="font-size:1.25rem;font-weight:700;">Timeline</div>
+    <div style="font-size:.8rem;color:var(--muted);margin-top:2px;">
+        {% if active_vehicle %}<i class="bi bi-car-front-fill" style="margin-right:4px;"></i>{{ active_vehicle.name }} &nbsp;·&nbsp; {% endif %}
+        Chronological history of all actions
+    </div>
+</div>
+
+{% if timeline_items %}
+<div class="timeline-container">
+    {% set current_date = None %}
+    {% for item in timeline_items %}
+    {% set item_date = item.timestamp[:10] %}
+
+    {# Show date block when date changes #}
+    {% if current_date != item_date %}
+    {% set current_date = item_date %}
+    <div class="timeline-date-block">
+        <div class="timeline-date-content">
+            <i class="bi bi-calendar3"></i>
+            <span>{{ current_date }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Timeline action item #}
+    <div class="timeline-item">
+        <div class="timeline-circle {{ item.icon_class }}">
+            <i class="bi bi-{{ item.icon }}"></i>
+        </div>
+        <div class="timeline-content">
+            <div class="timeline-time">{{ item.timestamp[11:16] }}</div>
+            <div class="timeline-action">
+                {% if item.type == 'vehicle_created' %}
+                <div class="timeline-title">Vehicle Added</div>
+                <div class="timeline-details">
+                    <strong>{{ item.vehicle_name }}</strong> ({{ item.vehicle_type }})
+                    {% if item.notes %}<br><span class="timeline-notes">{{ item.notes }}</span>{% endif %}
+                </div>
+                {% elif item.type == 'fuel_entry' %}
+                <div class="timeline-title mb-1">{% if item.fuel_type == 'Pertalite' %}<span class="fb-green">{{ item.fuel_type }}</span>
+                    {% elif item.fuel_type == 'Pertamax' %}<span class="fb-blue">{{ item.fuel_type }}</span>
+                    {% else %}<span class="fb-red">{{ item.fuel_type }}</span>{% endif %} Rp {{ "{:,.0f}".format(item.price) }}</div>
+                <div class="timeline-details">
+
+                    <strong>{{ "{:,.0f}".format(item.current_km) }} km</strong>
+                    {% if item.distance %}<br><span class="timeline-distance">{{ "{:,.1f}".format(item.distance) }} km driven</span>{% endif %}
+                    {% if item.notes %}<br><span class="timeline-notes">{{ item.notes }}</span>{% endif %}
+                </div>
+                {% elif item.type == 'mileage_entry' %}
+                <div class="timeline-title">{{ "{:,.0f}".format(item.odometer_km) }} km</div>
+                <div class="timeline-details">
+                    {% if item.notes %}<br><span class="timeline-notes">{{ item.notes }}</span>{% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty">
+    <i class="bi bi-clock-history"></i>
+    <p>
+        {% if not active_vehicle %}
+        No vehicle selected.<br>
+        <a href="{{ url_for('vehicles') }}" style="color:var(--green);text-decoration:underline;">Add a vehicle</a> to start tracking.
+        {% else %}
+        No timeline entries yet.<br>
+        <a href="{{ url_for('add') }}" style="color:var(--green);text-decoration:underline;">Add a fuel entry</a> to get started.
+        {% endif %}
+    </p>
+</div>
+{% endif %}
+{% endblock %}
