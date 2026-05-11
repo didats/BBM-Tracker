@@ -51,16 +51,34 @@
             <div class="prog">
                 <div class="prog-fill" style="width:{{ pct }}%;background:{% if row.fuel_type == 'Pertalite' %}var(--green){% elif row.fuel_type == 'Pertamax' %}var(--blue){% else %}var(--red){% endif %};"></div>
             </div>
-            <div style="font-size:.7rem;color:var(--muted);margin-top:4px;">{{ pct }}% of total</div>
+            <div style="font-size:.7rem;color:var(--muted);margin-top:4px;">
+                {{ pct }}% of total &nbsp;&nbsp;
+                Avg/km:
+                {% if row.avg_per_km is not none %}
+                Rp {{ "{:,.0f}".format(row.avg_per_km) }}
+                {% else %}
+                —
+                {% endif %}&nbsp;&nbsp;
+                Refill in:
+                {% if row.est_refill_days is not none %}
+                {{ "{:.1f}".format(row.est_refill_days) }} days
+                {% else %}
+                —
+                {% endif %}
+            </div>
             {% endif %}
+            <div style="font-size:.72rem;color:var(--muted);">Total km: {{ "{:,.1f}".format(row.total_km) }} km</div>
+
         </div>
         <div class="rec-right">
             <div style="font-weight:700;font-size:.88rem;">Rp {{ "{:,.0f}".format(row.total) }}</div>
-            <div style="font-size:.72rem;color:var(--muted);margin-top:2px;">avg Rp {{ "{:,.0f}".format(row.total / row.count) }}</div>
+
         </div>
     </div>
     {% else %}
-    <div class="empty" style="padding:24px;"><p>No data yet.</p></div>
+    <div class="empty" style="padding:24px;">
+        <p>No data yet.</p>
+    </div>
     {% endfor %}
 </div>
 
@@ -98,7 +116,9 @@
         {% endfor %}
     </div>
     {% else %}
-    <div class="empty"><i class="bi bi-calendar-x"></i><p>No mileage data yet.</p></div>
+    <div class="empty"><i class="bi bi-calendar-x"></i>
+        <p>No mileage data yet.</p>
+    </div>
     {% endif %}
 </div>
 
@@ -127,7 +147,9 @@
         {% endfor %}
     </div>
     {% else %}
-    <div class="empty"><i class="bi bi-calendar-x"></i> <p>No mileage data yet.</p></div>
+    <div class="empty"><i class="bi bi-calendar-x"></i>
+        <p>No mileage data yet.</p>
+    </div>
     {% endif %}
 </div>
 
@@ -153,26 +175,30 @@
     </form>
 
     {% if range_from and range_to %}
-        {% if mileage_range and mileage_range.entries and mileage_range.entries > 0 %}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div class="stat-card sc-blue">
-                <div class="slabel">Readings</div>
-                <div class="sval">{{ mileage_range.entries }}</div>
-            </div>
-            <div class="stat-card sc-green">
-                <div class="slabel">Total Distance</div>
-                <div class="sval">{% if mileage_range.distance and mileage_range.distance > 0 %}{{ "{:,.1f}".format(mileage_range.distance) }}{% else %}—{% endif %} <span style="font-size:.9rem;opacity:.7;">km</span></div>
-            </div>
-            <div class="stat-card" style="background:var(--surface2);border:1px solid var(--border);grid-column:span 2;">
-                <div class="slabel">Odometer Range</div>
-                <div style="color:#fff;font-size:.95rem;font-weight:600;">{{ "{:,.1f}".format(mileage_range.start_km) }} → {{ "{:,.1f}".format(mileage_range.end_km) }} km</div>
-            </div>
+    {% if mileage_range and mileage_range.entries and mileage_range.entries > 0 %}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="stat-card sc-blue">
+            <div class="slabel">Readings</div>
+            <div class="sval">{{ mileage_range.entries }}</div>
         </div>
-        {% else %}
-        <div class="empty"><i class="bi bi-search"></i> <p>No mileage data for this range.</p></div>
-        {% endif %}
+        <div class="stat-card sc-green">
+            <div class="slabel">Total Distance</div>
+            <div class="sval">{% if mileage_range.distance and mileage_range.distance > 0 %}{{ "{:,.1f}".format(mileage_range.distance) }}{% else %}—{% endif %} <span style="font-size:.9rem;opacity:.7;">km</span></div>
+        </div>
+        <div class="stat-card" style="background:var(--surface2);border:1px solid var(--border);grid-column:span 2;">
+            <div class="slabel">Odometer Range</div>
+            <div style="color:#fff;font-size:.95rem;font-weight:600;">{{ "{:,.1f}".format(mileage_range.start_km) }} → {{ "{:,.1f}".format(mileage_range.end_km) }} km</div>
+        </div>
+    </div>
     {% else %}
-    <div class="empty" style="padding:28px;"><i class="bi bi-calendar-range"></i> <p>Select a date range above.</p></div>
+    <div class="empty"><i class="bi bi-search"></i>
+        <p>No mileage data for this range.</p>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="empty" style="padding:28px;"><i class="bi bi-calendar-range"></i>
+        <p>Select a date range above.</p>
+    </div>
     {% endif %}
 </div>
 
@@ -180,15 +206,20 @@
 
 {% block scripts %}
 <script>
-function switchTab(id) {
-    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-    const idx = ['tab-date','tab-month','tab-range'].indexOf(id);
-    document.querySelectorAll('#tabs-bar .tab-btn')[idx].classList.add('active');
-}
-{% if range_from and range_to %}
-document.addEventListener('DOMContentLoaded', () => switchTab('tab-range'));
-{% endif %}
+    function switchTab(id) {
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        const idx = ['tab-date', 'tab-month', 'tab-range'].indexOf(id);
+        document.querySelectorAll('#tabs-bar .tab-btn')[idx].classList.add('active');
+    } {
+        %
+        if range_from and range_to %
+    }
+    document.addEventListener('DOMContentLoaded', () => switchTab('tab-range'));
+    {
+        %
+        endif %
+    }
 </script>
 {% endblock %}

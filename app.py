@@ -238,6 +238,8 @@ def delete_mileage(record_id):
 def stats():
     vid = get_active_vehicle_id()
     db = get_db()
+    range_from = request.args.get("range_from", "")
+    range_to = request.args.get("range_to", "")
 
     if vid:
         records = db.table("consumption").select("*").eq("vehicle_id", vid).order("created_at").execute().data
@@ -246,20 +248,69 @@ def stats():
         records = []
         all_mileage = []
 
-    total_spent = sum(r["price"] for r in records) if records else 0
-    total_entries = len(records)
+    # Apply optional date range filter to both consumption and mileage data
+    if range_from and range_to:
+        scoped_records = [r for r in records if range_from <= r["created_at"][:10] <= range_to]
+        scoped_mileage = [r for r in all_mileage if range_from <= r["recorded_at"][:10] <= range_to]
+    else:
+        scoped_records = records
+        scoped_mileage = all_mileage
+
+    total_spent = sum(r["price"] for r in scoped_records) if scoped_records else 0
+    total_entries = len(scoped_records)
+
+    # Average daily mileage used to estimate refill interval in days
+    date_map = {}
+    for r in scoped_mileage:
+        day = r["recorded_at"][:10]
+        date_map.setdefault(day, []).append(float(r["odometer_km"]))
+    daily_distances = [max(v) - min(v) for v in date_map.values() if max(v) - min(v) > 0]
+    avg_daily_km = (sum(daily_distances) / len(daily_distances)) if daily_distances else None
 
     by_type_map = {}
-    for r in records:
+    for r in scoped_records:
         ft = r["fuel_type"]
         if ft not in by_type_map:
-            by_type_map[ft] = {"fuel_type": ft, "count": 0, "total": 0}
+            by_type_map[ft] = {
+                "fuel_type": ft,
+                "count": 0,
+                "total": 0,
+                "total_km": 0,
+                "distance_count": 0,
+            }
         by_type_map[ft]["count"] += 1
         by_type_map[ft]["total"] += r["price"]
-    by_type = list(by_type_map.values())
+
+    # Build mileage distance per fuel type from mileage readings grouped by fill-up cycles
+    for idx, rec in enumerate(records):
+        ft = rec["fuel_type"]
+        if ft not in by_type_map:
+            continue
+
+        start_ts = rec["created_at"]
+        end_ts = records[idx + 1]["created_at"] if idx + 1 < len(records) else None
+        cycle_vals = [
+            float(m["odometer_km"])
+            for m in scoped_mileage
+            if m["recorded_at"] >= start_ts and (end_ts is None or m["recorded_at"] < end_ts)
+        ]
+
+        if len(cycle_vals) >= 2:
+            dist = max(cycle_vals) - min(cycle_vals)
+            if dist > 0:
+                by_type_map[ft]["total_km"] += dist
+                by_type_map[ft]["distance_count"] += 1
+
+    by_type = []
+    for row in by_type_map.values():
+        total_km = row["total_km"]
+        avg_cycle_km = (total_km / row["distance_count"]) if row["distance_count"] > 0 else None
+        row["avg_per_km"] = (row["total"] / total_km) if total_km > 0 else None
+        row["est_refill_days"] = (avg_cycle_km / avg_daily_km) if (avg_cycle_km and avg_daily_km and avg_daily_km > 0) else None
+        by_type.append(row)
 
     date_map = {}
-    for r in all_mileage:
+    for r in scoped_mileage:
         day = r["recorded_at"][:10]
         if day not in date_map:
             date_map[day] = []
@@ -271,7 +322,7 @@ def stats():
     ], key=lambda x: x["day"], reverse=True)
 
     month_map = {}
-    for r in all_mileage:
+    for r in scoped_mileage:
         month = r["recorded_at"][:7]
         if month not in month_map:
             month_map[month] = []
@@ -282,15 +333,18 @@ def stats():
         for m, v in month_map.items()
     ], key=lambda x: x["month"], reverse=True)
 
-    total_dist_mileage = sum(r["distance"] for r in mileage_by_date if r["distance"] and r["distance"] > 0)
+    # Calculate total distance tracked from mileage table (latest odometer - first odometer)
+    if scoped_mileage and len(scoped_mileage) >= 2:
+        total_dist_mileage = float(scoped_mileage[-1]["odometer_km"]) - float(scoped_mileage[0]["odometer_km"])
+        if total_dist_mileage < 0:
+            total_dist_mileage = 0
+    else:
+        total_dist_mileage = 0
 
-    range_from = request.args.get("range_from", "")
-    range_to   = request.args.get("range_to", "")
     mileage_range = None
-    if range_from and range_to:
-        filtered = [float(r["odometer_km"]) for r in all_mileage
-                    if range_from <= r["recorded_at"][:10] <= range_to]
-        if filtered:
+    if scoped_mileage:
+        filtered = [float(r["odometer_km"]) for r in scoped_mileage]
+        if filtered and range_from and range_to:
             mileage_range = {
                 "start_km": min(filtered), "end_km": max(filtered),
                 "distance": max(filtered) - min(filtered), "entries": len(filtered)
